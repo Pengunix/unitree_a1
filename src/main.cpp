@@ -52,7 +52,7 @@ int main() {
     // 打印结果
     std::cout << "程序运行时间: " << duration.count() << " us" << std::endl;
     
-    while(1)
+    while(1) 
     {   
         // cmd.id=2;
         // cmd.T = 0.20;
