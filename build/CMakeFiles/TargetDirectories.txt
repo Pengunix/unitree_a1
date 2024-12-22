@@ -1,3 +1,0 @@
-/home/jcp/Downloads/cpplearn/build/CMakeFiles/serial_port.dir
-/home/jcp/Downloads/cpplearn/build/CMakeFiles/edit_cache.dir
-/home/jcp/Downloads/cpplearn/build/CMakeFiles/rebuild_cache.dir
