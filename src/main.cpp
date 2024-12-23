@@ -15,7 +15,7 @@ int main() {
   Uart serial("/dev/ttyUSB0");
 
   cmd.id = 0;
-  cmd.mode = 10;
+  cmd.mode = 5;
 
   cmd.K_P = 0.002;
   // cmd.K_P = 0.01;

@@ -22,6 +22,7 @@ public:
   Uart(std::string dev, int baudrate = 4800000) {
     _fd = open(dev.c_str(), O_RDWR);
 
+
     _tio.c_cflag &= ~CBAUD;
     _tio.c_cflag &= ~PARENB;
     _tio.c_cflag &= ~CSTOPB;
@@ -65,11 +66,12 @@ public:
     printf("\n");
 #endif
 
-    usleep(90);
+    usleep(200);
 
     int rsize = Mread();
     if (rsize <= 0) {
-      printf("Read Error");
+      printf("Read Error\n");
+      return -1;
     }
 
 #if 0
@@ -89,6 +91,7 @@ public:
       memcpy(&(_rdata.motor_recv_data), _buffer, rsize);
     } else {
       printf("CRC ERROR!! \n");
+      return -1;
     }
 
     return 0;
@@ -97,7 +100,7 @@ public:
   int Mread(int tout_us = 500) {
     fd_set inputs;
     struct timeval tout;
-    tout.tv_sec = 1;
+    tout.tv_sec = 0;
     tout.tv_usec = tout_us;
 
     int num = 0, ret = 0;
@@ -107,7 +110,7 @@ public:
 
     ret = select(_fd + 1, &inputs, (fd_set *)NULL, (fd_set *)NULL, &tout);
     if (ret < 0) {
-      perror("select error!!");
+      perror("select error!!\n");
       return ret;
     }
     if (ret > 0) {
