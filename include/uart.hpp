@@ -21,7 +21,10 @@ class Uart {
 public:
   Uart(std::string dev, int baudrate = 4800000) {
     _fd = open(dev.c_str(), O_RDWR);
-
+    usleep(1000);
+    ioctl(_fd, TCFLSH,0);
+    ioctl(_fd, TCFLSH,1);
+    ioctl(_fd, TCFLSH,2);
 
     _tio.c_cflag &= ~CBAUD;
     _tio.c_cflag &= ~PARENB;
@@ -45,7 +48,9 @@ public:
       std::cerr << "Set serial ERROR!!!" << std::endl;
     }
   }
-  ~Uart() { close(_fd); }
+  ~Uart() { 
+    close(_fd); 
+  }
 
   int SendRecv(MotorCmd &cmd) {
     _cmd = cmd;
