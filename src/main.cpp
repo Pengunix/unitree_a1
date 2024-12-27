@@ -6,15 +6,15 @@
 #include <cstring>
 #include <fcntl.h>
 #include <iostream>
-#include <unistd.h>
 #include <memory>
+#include <unistd.h>
 
 MotorCmd cmd;
 MotorData data;
 
 int main() {
-  // Uart serial("/dev/ttyUSB0");
-  auto uart = std::make_shared<Uart>("/dev/ttyUSB0");
+  Uart serial("/dev/ttyUSB0");
+  // auto uart = std::make_shared<Uart>("/dev/ttyUSB0");
   cmd.id = 0;
   cmd.mode = 10;
 
@@ -28,12 +28,13 @@ int main() {
   uint32_t packs;
   while (1) {
     auto start = std::chrono::high_resolution_clock::now();
-    uart->SendRecv(cmd);
+    // uart->SendRecv(cmd);
+    serial.SendRecv(cmd);
     auto end = std::chrono::high_resolution_clock::now();
     auto duration =
         std::chrono::duration_cast<std::chrono::microseconds>(end - start);
     usleep(1000);
-    MotorData mdata = uart->GetMotorData();
+    MotorData mdata = serial.GetMotorData();
     printf("Rx: %d\tCosts: %ldus\tTemp: %d\tPos: %f\tT: %f\tW: %f\n", packs,
            duration.count(), mdata.Temp, mdata.Pos, mdata.T, mdata.W);
     packs++;

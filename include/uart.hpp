@@ -13,18 +13,60 @@
 #include <iostream>
 #include <linux/serial.h>
 #include <linux/tty_flags.h>
+#include <memory>
 #include <string>
 #include <sys/ioctl.h>
 #include <unistd.h>
 
+class unique_fd {
+public:
+  constexpr unique_fd() noexcept = default;
+  explicit unique_fd(int fd) noexcept : fd_(fd) {}
+  unique_fd(unique_fd &&u) noexcept : fd_(u.fd_) { u.fd_ = -1; }
+
+  ~unique_fd() {
+    if (-1 != fd_)
+      ::close(fd_);
+  }
+
+  unique_fd &operator=(unique_fd &&u) noexcept {
+    reset(u.release());
+    return *this;
+  }
+
+  int get() const noexcept { return fd_; }
+  operator int() const noexcept { return fd_; }
+
+  int release() noexcept {
+    int fd = fd_;
+    fd_ = -1;
+    return fd;
+  }
+  void reset(int fd = -1) noexcept { unique_fd(fd).swap(*this); }
+  void swap(unique_fd &u) noexcept { std::swap(fd_, u.fd_); }
+
+  unique_fd(const unique_fd &) = delete;
+  unique_fd &operator=(const unique_fd &) = delete;
+
+  // in the global namespace to override ::close(int)
+  friend int close(unique_fd &u) noexcept {
+    int closed = ::close(u.fd_);
+    u.fd_ = -1;
+    return closed;
+  }
+
+private:
+  int fd_ = -1;
+};
+
 class Uart {
 public:
   Uart(std::string dev, int baudrate = 4800000) {
-    _fd = open(dev.c_str(), O_RDWR);
+    _fd = std::make_unique<unique_fd>(open(dev.c_str(), O_RDWR));
     usleep(1000);
-    ioctl(_fd, TCFLSH,0);
-    ioctl(_fd, TCFLSH,1);
-    ioctl(_fd, TCFLSH,2);
+    ioctl(_fd->get(), TCFLSH, 0);
+    ioctl(_fd->get(), TCFLSH, 1);
+    ioctl(_fd->get(), TCFLSH, 2);
 
     _tio.c_cflag &= ~CBAUD;
     _tio.c_cflag &= ~PARENB;
@@ -43,20 +85,18 @@ public:
     _tio.c_cc[VMIN] = 1;
     _tio.c_cc[VTIME] = 0;
 
-    int res = ioctl(_fd, TCSETS2, &_tio);
+    int res = ioctl(_fd->get(), TCSETS2, &_tio);
     if (res != 0) {
       std::cerr << "Set serial ERROR!!!" << std::endl;
     }
   }
-  ~Uart() { 
-    close(_fd); 
-  }
+  ~Uart() { _fd->release(); }
 
-  int SendRecv(MotorCmd &cmd) {
+  int SendRecv(const MotorCmd &cmd) {
     _cmd = cmd;
     _calComData();
 
-    int wsize = write(_fd, &_cmd.motorRawData, 34);
+    int wsize = write(_fd->get(), &_cmd.motorRawData, 34);
     if (wsize <= 0) {
       std::cerr << "Error in Writing Data" << std::endl;
       return -1;
@@ -71,11 +111,11 @@ public:
     printf("\n");
 #endif
 
-    usleep(200);
+    usleep(100);
 
     int rsize = Mread();
     if (rsize <= 0) {
-      printf("Read Error\n");
+      std::cerr << "Read Error!" << std::endl;
       return -1;
     }
 
@@ -95,7 +135,7 @@ public:
             *(uint32_t *)(_buffer + rsize - 4)) {
       memcpy(&(_rdata.motor_recv_data), _buffer, rsize);
     } else {
-      printf("CRC ERROR!! \n");
+      std::cerr << "CRC Error" << std::endl;
       return -1;
     }
 
@@ -111,23 +151,24 @@ public:
     int num = 0, ret = 0;
 
     FD_ZERO(&inputs);
-    FD_SET(_fd, &inputs);
+    FD_SET(_fd->get(), &inputs);
 
-    ret = select(_fd + 1, &inputs, (fd_set *)NULL, (fd_set *)NULL, &tout);
+    ret =
+        select(_fd->get() + 1, &inputs, (fd_set *)NULL, (fd_set *)NULL, &tout);
     if (ret < 0) {
-      perror("select error!!\n");
+      std::cerr << "Select Error" << std::endl;
       return ret;
     }
     if (ret > 0) {
-      if (FD_ISSET(_fd, &inputs)) {
-        num = read(_fd, _buffer, 78);
+      if (FD_ISSET(_fd->get(), &inputs)) {
+        num = read(_fd->get(), _buffer, 78);
       }
     }
 
     return num;
   }
 
-  MotorData &GetMotorData() {
+  MotorData GetMotorData() {
     _rdata.motor_id = _rdata.motor_recv_data.head.motorID;
     _rdata.mode = _rdata.motor_recv_data.Mdata.mode;
     _rdata.Temp = _rdata.motor_recv_data.Mdata.Temp;
@@ -166,7 +207,7 @@ public:
 
 private:
   termios2 _tio;
-  int _fd;
+  std::unique_ptr<unique_fd> _fd;
   MotorCmd _cmd;
   MotorData _rdata;
   uint8_t _buffer[78];
