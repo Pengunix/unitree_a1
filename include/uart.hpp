@@ -18,6 +18,7 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
+// C风格文件描述符封装，方便使用独占指针
 class unique_fd {
 public:
   constexpr unique_fd() noexcept = default;
@@ -64,24 +65,34 @@ public:
   Uart(std::string dev, int baudrate = 4800000) {
     _fd = std::make_unique<unique_fd>(open(dev.c_str(), O_RDWR));
     usleep(1000);
+    // 清空缓冲区
     ioctl(_fd->get(), TCFLSH, 0);
     ioctl(_fd->get(), TCFLSH, 1);
     ioctl(_fd->get(), TCFLSH, 2);
 
+    // 串口基础属性，波特率，校验位，停止位 8N1
     _tio.c_cflag &= ~CBAUD;
     _tio.c_cflag &= ~PARENB;
     _tio.c_cflag &= ~CSTOPB;
     _tio.c_cflag &= ~CRTSCTS;
     _tio.c_cflag &= ~(CSIZE | PARENB);
     _tio.c_cflag |= CS8;
+    // 设置非标波特率
     _tio.c_cflag |= BOTHER;
+    // 无延迟
     _tio.c_cflag |= O_NDELAY;
+    // 关闭流控
     _tio.c_iflag &= ~(IXON | IXOFF | IXANY);
+    // 忽略终端特性
     _tio.c_iflag &=
         ~(IGNBRK | BRKINT | ICRNL | INLCR | PARMRK | INPCK | ISTRIP);
+    // 输入波特率
     _tio.c_ispeed = baudrate;
+    // 输出波特率
     _tio.c_ospeed = baudrate;
+    // 忽略终端特性
     _tio.c_lflag &= ~(ECHO | ECHONL | ICANON | IEXTEN | ISIG);
+    // 打开原始模式，每次读出1字节
     _tio.c_cc[VMIN] = 1;
     _tio.c_cc[VTIME] = 0;
 
@@ -94,6 +105,7 @@ public:
 
   int SendRecv(const MotorCmd &cmd) {
     _cmd = cmd;
+    // 计算发送数据
     _calComData();
 
     int wsize = write(_fd->get(), &_cmd.motorRawData, 34);
@@ -113,6 +125,7 @@ public:
 
     usleep(100);
 
+    // 将数据读入_buffer
     int rsize = Mread();
     if (rsize <= 0) {
       std::cerr << "Read Error!" << std::endl;
@@ -129,7 +142,7 @@ public:
     // printf("%X \n", *(uint32_t *)(_buffer + rsize - 4));
     // printf("%X \n", crc32_core((uint32_t *)_buffer, 18));
 #endif
-
+    // 判断包头及CRC校验
     if (_buffer[0] == 0xFE && _buffer[1] == 0xEE &&
         crc32_core((uint32_t *)_buffer, 18) ==
             *(uint32_t *)(_buffer + rsize - 4)) {
@@ -153,6 +166,7 @@ public:
     FD_ZERO(&inputs);
     FD_SET(_fd->get(), &inputs);
 
+    // 使用select设置读取超时时长
     ret =
         select(_fd->get() + 1, &inputs, (fd_set *)NULL, (fd_set *)NULL, &tout);
     if (ret < 0) {
@@ -167,7 +181,7 @@ public:
 
     return num;
   }
-
+  // 接收数据转换
   MotorData GetMotorData() {
     _rdata.motor_id = _rdata.motor_recv_data.head.motorID;
     _rdata.mode = _rdata.motor_recv_data.Mdata.mode;
@@ -212,6 +226,7 @@ private:
   MotorData _rdata;
   uint8_t _buffer[78];
 
+  // 发送数据转换
   void _calComData() {
     _cmd.motorRawData.head.start[0] = 0xFE;
     _cmd.motorRawData.head.start[1] = 0xEE;

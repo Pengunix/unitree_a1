@@ -2,8 +2,6 @@
 #define MOTOR_MSG
 
 #include <stdint.h>
-int16_t q15_t;
-
 #pragma pack(1)
 
 // 发送用单个数据数据结构
