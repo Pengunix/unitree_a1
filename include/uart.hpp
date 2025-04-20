@@ -17,58 +17,20 @@
 #include <string>
 #include <sys/ioctl.h>
 #include <unistd.h>
+#include <termios.h>
+#include <chrono>
 
-// C风格文件描述符封装，方便使用独占指针
-class unique_fd {
-public:
-  constexpr unique_fd() noexcept = default;
-  explicit unique_fd(int fd) noexcept : fd_(fd) {}
-  unique_fd(unique_fd &&u) noexcept : fd_(u.fd_) { u.fd_ = -1; }
-
-  ~unique_fd() {
-    if (-1 != fd_)
-      ::close(fd_);
-  }
-
-  unique_fd &operator=(unique_fd &&u) noexcept {
-    reset(u.release());
-    return *this;
-  }
-
-  int get() const noexcept { return fd_; }
-  operator int() const noexcept { return fd_; }
-
-  int release() noexcept {
-    int fd = fd_;
-    fd_ = -1;
-    return fd;
-  }
-  void reset(int fd = -1) noexcept { unique_fd(fd).swap(*this); }
-  void swap(unique_fd &u) noexcept { std::swap(fd_, u.fd_); }
-
-  unique_fd(const unique_fd &) = delete;
-  unique_fd &operator=(const unique_fd &) = delete;
-
-  // in the global namespace to override ::close(int)
-  friend int close(unique_fd &u) noexcept {
-    int closed = ::close(u.fd_);
-    u.fd_ = -1;
-    return closed;
-  }
-
-private:
-  int fd_ = -1;
-};
+// TODO(me) 错误直接处理，不打印在标准输出
 
 class Uart {
 public:
   Uart(std::string dev, int baudrate = 4800000) {
-    _fd = std::make_unique<unique_fd>(open(dev.c_str(), O_RDWR));
+    _fd = open(dev.c_str(), O_RDWR);
     usleep(1000);
     // 清空缓冲区
-    ioctl(_fd->get(), TCFLSH, 0);
-    ioctl(_fd->get(), TCFLSH, 1);
-    ioctl(_fd->get(), TCFLSH, 2);
+    ioctl(_fd, TCFLSH, 0);
+    ioctl(_fd, TCFLSH, 1);
+    ioctl(_fd, TCFLSH, 2);
 
     // 串口基础属性，波特率，校验位，停止位 8N1
     _tio.c_cflag &= ~CBAUD;
@@ -96,21 +58,20 @@ public:
     _tio.c_cc[VMIN] = 1;
     _tio.c_cc[VTIME] = 0;
 
-    int res = ioctl(_fd->get(), TCSETS2, &_tio);
+    int res = ioctl(_fd, TCSETS2, &_tio);
     if (res != 0) {
-      std::cerr << "Set serial ERROR!!!" << std::endl;
+      std::cerr << "Init serial ERROR!!!" << std::endl;
+      exit(0);
     }
   }
-  ~Uart() { _fd->release(); }
-
+  ~Uart() { close(_fd); }
   int SendRecv(const MotorCmd &cmd) {
     _cmd = cmd;
     // 计算发送数据
     _calComData();
-
-    int wsize = write(_fd->get(), &_cmd.motorRawData, 34);
+    int wsize = write(_fd, &_cmd.motorRawData, 34);
     if (wsize <= 0) {
-      std::cerr << "Error in Writing Data" << std::endl;
+      // std::cerr << "Error in Writing Data" << std::endl;
       return -1;
     }
 
@@ -123,12 +84,12 @@ public:
     printf("\n");
 #endif
 
-    usleep(100);
-
-    // 将数据读入_buffer
-    int rsize = Mread();
+    // tcdrain(_fd);
+    usleep(200);
+    int rsize = Read();
+          auto end = std::chrono::high_resolution_clock::now();
     if (rsize <= 0) {
-      std::cerr << "Read Error!" << std::endl;
+      // std::cerr << "Read Error!" << std::endl;
       return -1;
     }
 
@@ -136,7 +97,7 @@ public:
     printf("Received ");
     for (int i = 0; i < rsize; i++) {
       uint8_t *byte = (uint8_t *)&_buffer;
-      printf("%02X", *(byte + i));
+      printf("%02X ", *(byte + i));
     }
     printf("\n");
     // printf("%X \n", *(uint32_t *)(_buffer + rsize - 4));
@@ -148,14 +109,14 @@ public:
             *(uint32_t *)(_buffer + rsize - 4)) {
       memcpy(&(_rdata.motor_recv_data), _buffer, rsize);
     } else {
-      std::cerr << "CRC Error" << std::endl;
+      // std::cerr << "CRC Error" << std::endl;
       return -1;
     }
 
     return 0;
   }
 
-  int Mread(int tout_us = 500) {
+  int Read(int tout_us = 800) {
     fd_set inputs;
     struct timeval tout;
     tout.tv_sec = 0;
@@ -164,21 +125,19 @@ public:
     int num = 0, ret = 0;
 
     FD_ZERO(&inputs);
-    FD_SET(_fd->get(), &inputs);
+    FD_SET(_fd, &inputs);
 
     // 使用select设置读取超时时长
-    ret =
-        select(_fd->get() + 1, &inputs, (fd_set *)NULL, (fd_set *)NULL, &tout);
+    ret = select(_fd + 1, &inputs, (fd_set *)NULL, (fd_set *)NULL, &tout);
     if (ret < 0) {
-      std::cerr << "Select Error" << std::endl;
+      // std::cerr << "Select Error" << std::endl;
       return ret;
     }
     if (ret > 0) {
-      if (FD_ISSET(_fd->get(), &inputs)) {
-        num = read(_fd->get(), _buffer, 78);
+      if (FD_ISSET(_fd, &inputs)) {
+        num = read(_fd, _buffer, 78);
       }
     }
-
     return num;
   }
   // 接收数据转换
@@ -221,7 +180,7 @@ public:
 
 private:
   termios2 _tio;
-  std::unique_ptr<unique_fd> _fd;
+  int _fd;
   MotorCmd _cmd;
   MotorData _rdata;
   uint8_t _buffer[78];
