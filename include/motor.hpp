@@ -108,15 +108,24 @@ public:
     if (uart->SendRecv(_cmd) != 0) {
       uart->SendRecv(_cmd);
     }
-    _motorStatus = uart->GetMotorData();
+    {
+      std::lock_guard<std::mutex> lck(this->mReadLock);
+      _motorStatus = uart->GetMotorData();
+    }
     return _motorStatus;
   }
-  MotorData getMotorData() { return _motorStatus; }
+  MotorData getMotorData() {
+    mReadLock.lock();
+    MotorData snap = _motorStatus;
+    mReadLock.unlock();
+    return snap;
+  }
 
 private:
   MotorCmd _cmd;
   MotorData _motorStatus;
   std::shared_ptr<Uart> uart;
+  std::mutex mReadLock;
 };
 
 class Leg {
@@ -129,7 +138,7 @@ public:
     // TODO(me) 动态调整大小，方便使用id找到Motor对象
     _motors.reserve(4);
     for (const int &i : motors) {
-      _motors.emplace(_motors.begin() + i, Motor(uart, i));
+      _motors.emplace(_motors.begin() + i, std::make_shared<Motor>(uart,i));
     }
     startControl = true;
     _thread = std::make_unique<std::thread>(&Leg::task, this);
@@ -154,11 +163,11 @@ public:
 
   MotorData GetMotorStatus(int MotorID) {}
 
-  Motor &operator[](int Motorid) { return _motors[Motorid]; }
+std::shared_ptr<Motor> operator[](int Motorid) { return _motors[Motorid]; }
 
 private:
   std::string _legName;
-  std::vector<Motor> _motors;
+  std::vector<std::shared_ptr<Motor>> _motors;
   std::unique_ptr<std::thread> _thread;
   std::shared_ptr<Uart> uart;
   std::unique_ptr<Queue<MotorCmd>> qMotorCmd;
@@ -167,7 +176,7 @@ private:
   void task() {
     while (startControl) {
       MotorCmd cmd = qMotorCmd->Get();
-      _motors[cmd.id].setMotorProp(cmd);
+      _motors[cmd.id]->setMotorProp(cmd);
     }
   }
 };

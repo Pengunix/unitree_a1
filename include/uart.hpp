@@ -16,11 +16,10 @@
 #include <memory>
 #include <string>
 #include <sys/ioctl.h>
-#include <unistd.h>
 #include <termios.h>
-#include <chrono>
+#include <unistd.h>
 
-// TODO(me) 错误直接处理，不打印在标准输出
+#include <chrono>
 
 class Uart {
 public:
@@ -60,8 +59,7 @@ public:
 
     int res = ioctl(_fd, TCSETS2, &_tio);
     if (res != 0) {
-      std::cerr << "Init serial ERROR!!!" << std::endl;
-      exit(0);
+      std::cerr << "Set serial ERROR!!!" << std::endl;
     }
   }
   ~Uart() { close(_fd); }
@@ -71,7 +69,7 @@ public:
     _calComData();
     int wsize = write(_fd, &_cmd.motorRawData, 34);
     if (wsize <= 0) {
-      // std::cerr << "Error in Writing Data" << std::endl;
+      std::cerr << "Error in Writing Data" << std::endl;
       return -1;
     }
 
@@ -84,12 +82,11 @@ public:
     printf("\n");
 #endif
 
-    // tcdrain(_fd);
     usleep(200);
     int rsize = Read();
-          auto end = std::chrono::high_resolution_clock::now();
+
     if (rsize <= 0) {
-      // std::cerr << "Read Error!" << std::endl;
+      std::cerr << "Read Error!" << std::endl;
       return -1;
     }
 
@@ -100,23 +97,21 @@ public:
       printf("%02X ", *(byte + i));
     }
     printf("\n");
-    // printf("%X \n", *(uint32_t *)(_buffer + rsize - 4));
-    // printf("%X \n", crc32_core((uint32_t *)_buffer, 18));
 #endif
     // 判断包头及CRC校验
     if (_buffer[0] == 0xFE && _buffer[1] == 0xEE &&
         crc32_core((uint32_t *)_buffer, 18) ==
-            *(uint32_t *)(_buffer + rsize - 4)) {
+            *(uint32_t *)(_buffer + 78 - 4)) {
       memcpy(&(_rdata.motor_recv_data), _buffer, rsize);
     } else {
-      // std::cerr << "CRC Error" << std::endl;
+      std::cerr << "CRC Error" << std::endl;
       return -1;
     }
 
     return 0;
   }
 
-  int Read(int tout_us = 800) {
+  int Read(int tout_us = 900) {
     fd_set inputs;
     struct timeval tout;
     tout.tv_sec = 0;
@@ -130,13 +125,16 @@ public:
     // 使用select设置读取超时时长
     ret = select(_fd + 1, &inputs, (fd_set *)NULL, (fd_set *)NULL, &tout);
     if (ret < 0) {
-      // std::cerr << "Select Error" << std::endl;
+      std::cerr << "Select Error" << std::endl;
       return ret;
     }
     if (ret > 0) {
       if (FD_ISSET(_fd, &inputs)) {
         num = read(_fd, _buffer, 78);
       }
+    }
+    if (num < 78) {
+      num = read(_fd, _buffer + num, 78 - num);
     }
     return num;
   }
@@ -183,7 +181,7 @@ private:
   int _fd;
   MotorCmd _cmd;
   MotorData _rdata;
-  uint8_t _buffer[78];
+  uint8_t _buffer[256];
 
   // 发送数据转换
   void _calComData() {
