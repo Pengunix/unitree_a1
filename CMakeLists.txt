@@ -7,8 +7,8 @@ set(CMAKE_CXX_STANDARD 17)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
  
  
-add_executable(${PROJECT_NAME} src/main.cpp)
-target_link_libraries(${PROJECT_NAME} m pthread)
+# add_executable(${PROJECT_NAME} src/main.cpp)
+# target_link_libraries(${PROJECT_NAME} m pthread)
 
-add_executable(test src/test.cpp)
+add_executable(test test/motor_test.cpp)
 target_link_libraries(test m pthread)

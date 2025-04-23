@@ -34,6 +34,12 @@ public:
     m_notEmpty.notify_all();
   }
 
+  void Clear() {
+    std::unique_lock<std::mutex> lock(m_mutex);
+    m_deqDatas.clear();
+    lock.unlock();
+  }
+
   T Get() {
     std::unique_lock<std::mutex> lock(m_mutex);
     //有一个判断谓词,等价于while(!Pred){m_notEmpty.wait()}
@@ -87,6 +93,7 @@ public:
     using namespace std::chrono_literals;
     for (int i = 0; i < 50; i++) {
       _motorStatus = setMotorProp(0, 0, 0, 0, 0, 0);
+      start_pose = _motorStatus.Pos;
       std::this_thread::sleep_for(1ms);
     }
   }
@@ -99,18 +106,24 @@ public:
     _cmd.T = t;
     _cmd.W = w;
     uart->SendRecv(_cmd);
-    _motorStatus = uart->GetMotorData();
+    {
+      std::lock_guard<std::mutex> lck(this->mReadLock);
+      MotorData data = uart->GetMotorData();
+      if (data.motor_id == _cmd.id) {
+        _motorStatus = data;
+      }
+    }
     return _motorStatus;
   }
   MotorData setMotorProp(const MotorCmd &cmd) {
     _cmd = cmd;
-    // 校验错误重发一次
-    if (uart->SendRecv(_cmd) != 0) {
-      uart->SendRecv(_cmd);
-    }
+    uart->SendRecv(_cmd);
     {
       std::lock_guard<std::mutex> lck(this->mReadLock);
-      _motorStatus = uart->GetMotorData();
+      MotorData data = uart->GetMotorData();
+      if (data.motor_id == _cmd.id) {
+        _motorStatus = data;
+      }
     }
     return _motorStatus;
   }
@@ -124,6 +137,11 @@ public:
 private:
   MotorCmd _cmd;
   MotorData _motorStatus;
+  float start_pose;
+  float min_pose;
+  float max_pose;
+  float zero_pose;
+  int8_t dir;
   std::shared_ptr<Uart> uart;
   std::mutex mReadLock;
 };
@@ -138,7 +156,7 @@ public:
     // TODO(me) 动态调整大小，方便使用id找到Motor对象
     _motors.reserve(4);
     for (const int &i : motors) {
-      _motors.emplace(_motors.begin() + i, std::make_shared<Motor>(uart,i));
+      _motors.emplace(_motors.begin() + i, std::make_shared<Motor>(uart, i));
     }
     startControl = true;
     _thread = std::make_unique<std::thread>(&Leg::task, this);
@@ -158,12 +176,18 @@ public:
     cmd.Pos = pos;
     cmd.T = t;
     cmd.W = w;
-    qMotorCmd->Put(cmd);
+    if (qMotorCmd->Full()) {
+      std::cout << "Queue FULL!! Motor May Be Disconnected" << std::endl;
+    } else {
+      qMotorCmd->Put(cmd);
+    }
   }
 
-  MotorData GetMotorStatus(int MotorID) {}
+  MotorData getMotorData(int MotorID) {
+    return _motors[MotorID]->getMotorData();
+  }
 
-std::shared_ptr<Motor> operator[](int Motorid) { return _motors[Motorid]; }
+  std::shared_ptr<Motor> operator[](int Motorid) { return _motors[Motorid]; }
 
 private:
   std::string _legName;

@@ -64,6 +64,7 @@ public:
   }
   ~Uart() { close(_fd); }
   int SendRecv(const MotorCmd &cmd) {
+    tcflush(_fd, TCIOFLUSH);
     _cmd = cmd;
     // 计算发送数据
     _calComData();
@@ -82,9 +83,8 @@ public:
     printf("\n");
 #endif
 
-    usleep(200);
+    usleep(50);
     int rsize = Read();
-
     if (rsize <= 0) {
       std::cerr << "Read Error!" << std::endl;
       return -1;
@@ -98,11 +98,12 @@ public:
     }
     printf("\n");
 #endif
-    // 判断包头及CRC校验
+    // 判断包头及CRC校验 四字节x18 数据长度写死
     if (_buffer[0] == 0xFE && _buffer[1] == 0xEE &&
         crc32_core((uint32_t *)_buffer, 18) ==
             *(uint32_t *)(_buffer + 78 - 4)) {
-      memcpy(&(_rdata.motor_recv_data), _buffer, rsize);
+      memset(&(_rdata.motor_recv_data), 0, sizeof(_rdata.motor_recv_data));
+      memcpy(&(_rdata.motor_recv_data), _buffer, 78);
     } else {
       std::cerr << "CRC Error" << std::endl;
       return -1;
@@ -134,7 +135,7 @@ public:
       }
     }
     if (num < 78) {
-      num = read(_fd, _buffer + num, 78 - num);
+      num += read(_fd, _buffer + num, 78 - num);
     }
     return num;
   }
