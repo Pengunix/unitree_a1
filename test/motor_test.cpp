@@ -1,20 +1,24 @@
 #include "motor.hpp"
 using namespace std::chrono_literals;
+constexpr std::array<int, 3> FL_dir = {1, 1, 1};
+constexpr std::array<int, 3> FR_dir = {1, -1, -1};
+constexpr std::array<int, 3> BL_dir = {-1, 1, 1};
+constexpr std::array<int, 3> BR_dir = {-1, -1, -1};
 
 int main() {
-  std::cout << "0---------------------------------------------------"
+  std::cout << "FL---------------------------------------------------"
+           << std::endl;
+  Leg legFL("/dev/ttyUSB0", "FL", FL_dir);
+  std::cout << "FR---------------------------------------------------"
             << std::endl;
-  Leg legFL("/dev/ttyUSB0", "FL", {0, 1, 2});
-  std::cout << "1---------------------------------------------------"
+  Leg legFR("/dev/ttyUSB1", "FR", FR_dir);
+  std::cout << "BL---------------------------------------------------"
             << std::endl;
-  Leg legFR("/dev/ttyUSB1", "FR", {0, 1, 2});
-  std::cout << "2---------------------------------------------------"
+  Leg legBL("/dev/ttyUSB2", "BL", BL_dir);
+  std::cout << "BR---------------------------------------------------"
             << std::endl;
-  Leg legBL("/dev/ttyUSB2", "BL", {0, 1, 2});
-  std::cout << "3---------------------------------------------------"
-            << std::endl;
-  Leg legBR("/dev/ttyUSB3", "BR", {0, 1, 2});
-  std::cout << "done-------------------------" << std::endl;
+  Leg legBR("/dev/ttyUSB3", "BR", BR_dir);
+  std::cout << "Done------------------------------------------------" << std::endl;
   while (1) {
     auto start = std::chrono::high_resolution_clock::now();
     legFL.UpdateMotor(0, 0, 0, 0, 0, 0, 0);
@@ -36,11 +40,8 @@ int main() {
     auto duration =
         std::chrono::duration_cast<std::chrono::microseconds>(end - start);
     MotorData mfl0 = legFL[0]->getMotorData();
-    printf("FL0id: %d, FL0Pos: %lf \n",mfl0.motor_id, mfl0.Pos);
-    if (mfl0.motor_id == 2) {
-      printf("errorororororo");
-      break;
-    }
+    printf("FL0id: %d, FL0Pos: %lf \n", mfl0.motor_id, mfl0.Pos);
+
     // MotorData mfl1 = legFL[1]->getMotorData();
     // printf("FL1Pos: %lf \t", mfl1.Pos);
     // MotorData mfl2 = legFL[2]->getMotorData();

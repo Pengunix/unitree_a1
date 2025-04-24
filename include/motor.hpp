@@ -10,6 +10,10 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
+constexpr double PI = 3.141592653589793;
+constexpr double hip_offset = 0;
+constexpr double calf_offset = (PI - 0.3628) * 9.1;
+constexpr double thigh_offset = (-PI / 2 + 0.3628) * 9.1;
 
 template <typename T> class Queue {
 public:
@@ -86,9 +90,19 @@ private:
 
 class Motor {
 public:
-  Motor(std::shared_ptr<Uart> MotorUart, int MotorID) {
-    _cmd.id = MotorID;
+  Motor(std::shared_ptr<Uart> MotorUart, int MotorID, int8_t dir,
+        float offset) {
     uart = std::move(MotorUart);
+    _cmd.id = MotorID;
+    this->id = MotorID;
+    // 约束dir变量，有时间改为枚举
+    if (dir == -1 || dir == 1) {
+      this->dir = dir;
+    } else {
+      dir = 0;
+      std::cout << "Motor dir Error" << std::endl;
+    }
+    this->offset = offset;
 
     using namespace std::chrono_literals;
     for (int i = 0; i < 50; i++) {
@@ -96,6 +110,59 @@ public:
       start_pose = _motorStatus.Pos;
       std::this_thread::sleep_for(1ms);
     }
+    cal_start_pose = CalPose(start_pose);
+
+    if (dir == 1) {
+      zero_pose = start_pose + offset;
+      if (this->id == 0) {
+        if (this->id == 0) {
+          max_pose = std::max(CalPose(zero_pose - 1 * 9.1),
+                              CalPose(start_pose + 1 * 9.1));
+          min_pose = std::min(CalPose(zero_pose - 1 * 9.1),
+                              CalPose(start_pose + 1 * 9.1));
+        }
+      } else if (this->id == 1) {
+        max_pose = std::max(CalPose(zero_pose - 9.1 * PI / 5),
+                            CalPose(start_pose + PI / 2 * 9.1));
+        min_pose = std::min(CalPose(zero_pose - 9.1 * PI / 5),
+                            CalPose(start_pose + PI / 2 * 9.1));
+      } else if (this->id == 2) {
+        max_pose = std::max(CalPose(zero_pose - 3), CalPose(start_pose - 5));
+        min_pose = std::min(CalPose(zero_pose - 3), CalPose(start_pose - 5));
+      }
+    } else if (dir == -1) {
+      zero_pose = start_pose - offset;
+      if (this->id == 0) {
+        max_pose = std::max(CalPose(zero_pose + 1 * 9.1),
+                            CalPose(start_pose - 1 * 9.1));
+        min_pose = std::min(CalPose(zero_pose + 1 * 9.1),
+                            CalPose(start_pose - 1 * 9.1));
+      }
+      if (this->id == 1) {
+        max_pose = std::max(CalPose(zero_pose + 9.1 * PI / 5),
+                            CalPose(start_pose - PI / 2 * 9.1));
+        min_pose = std::min(CalPose(zero_pose + 9.1 * PI / 5),
+                            CalPose(start_pose - PI / 2 * 9.1));
+      }
+      if (this->id == 2) {
+        max_pose = std::max(CalPose(zero_pose - 3), CalPose(start_pose + 5));
+        min_pose = std::min(CalPose(zero_pose - 3), CalPose(start_pose + 5));
+      }
+    }
+    std::cout << "电机ID：" << (int)this->id << " 初始位置："
+              << this->cal_start_pose << " 零位置：" << zero_pose << " 下限位："
+              << min_pose << " 上限位：" << max_pose << std::endl;
+  }
+  double getCalStartPose() const { return cal_start_pose; }
+
+  inline double CalPose(double p) const {
+    if (dir == 1) {
+      return (-zero_pose + p) / 9.1;
+    } else if (dir == -1) {
+      return (zero_pose - p) / 9.1;
+    }
+    // 此处仅为避免编译器警告，正常情况下dir只有以上两种情况
+    return 0;
   }
   MotorData setMotorProp(int mode, float kp, float kw, float pos, float t,
                          float w) {
@@ -116,8 +183,7 @@ public:
     return _motorStatus;
   }
   MotorData setMotorProp(const MotorCmd &cmd) {
-    _cmd = cmd;
-    uart->SendRecv(_cmd);
+    uart->SendRecv(cmd);
     {
       std::lock_guard<std::mutex> lck(this->mReadLock);
       MotorData data = uart->GetMotorData();
@@ -137,10 +203,18 @@ public:
 private:
   MotorCmd _cmd;
   MotorData _motorStatus;
+  uint8_t id;
+  // 电机上电起始位置
   float start_pose;
+  float cal_start_pose;
+  // 计算得到电机机械限位
   float min_pose;
   float max_pose;
+  // 计算得到的零点位置
   float zero_pose;
+  // 零点位置相铰于上电位置的偏移
+  float offset;
+  // 电机正方向
   int8_t dir;
   std::shared_ptr<Uart> uart;
   std::mutex mReadLock;
@@ -148,16 +222,15 @@ private:
 
 class Leg {
 public:
-  Leg(std::string UartPath, std::string LegName,
-      std::initializer_list<int> motors)
+  Leg(std::string UartPath, std::string LegName, std::array<int, 3> dirs)
       : _legName(LegName) {
     uart = std::make_shared<Uart>(UartPath);
     qMotorCmd = std::make_unique<Queue<MotorCmd>>(100);
     // TODO(me) 动态调整大小，方便使用id找到Motor对象
-    _motors.reserve(4);
-    for (const int &i : motors) {
-      _motors.emplace(_motors.begin() + i, std::make_shared<Motor>(uart, i));
-    }
+    _motors[0] = std::make_shared<Motor>(uart, 0, dirs[0], hip_offset);
+    _motors[1] = std::make_shared<Motor>(uart, 1, dirs[1], hip_offset);
+    _motors[2] = std::make_shared<Motor>(uart, 2, dirs[2], hip_offset);
+
     startControl = true;
     _thread = std::make_unique<std::thread>(&Leg::task, this);
   }
@@ -191,7 +264,7 @@ public:
 
 private:
   std::string _legName;
-  std::vector<std::shared_ptr<Motor>> _motors;
+  std::array<std::shared_ptr<Motor>, 3> _motors;
   std::unique_ptr<std::thread> _thread;
   std::shared_ptr<Uart> uart;
   std::unique_ptr<Queue<MotorCmd>> qMotorCmd;
