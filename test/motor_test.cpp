@@ -39,8 +39,10 @@ int main() {
     auto end = std::chrono::high_resolution_clock::now();
     auto duration =
         std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-    MotorData mfl0 = legFL[0]->getMotorData();
-    printf("FL0id: %d, FL0Pos: %lf \n", mfl0.motor_id, mfl0.Pos);
+    double mfl0 = legFL[0]->getMotorPos();
+    double mfl1 = legFL[1]->getMotorPos();
+    double mfl2 = legFL[2]->getMotorPos();
+    printf("FL0Pos: %lf FL1Pos: %lf FL2Pos: %lf \n", mfl0, mfl1, mfl2);
 
     // MotorData mfl1 = legFL[1]->getMotorData();
     // printf("FL1Pos: %lf \t", mfl1.Pos);
