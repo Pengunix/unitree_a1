@@ -176,11 +176,11 @@ public:
     // 此处仅为避免编译器警告，正常情况下dir只有以上两种情况
     return 0;
   }
-  MotorData setMotorProp(int mode, float kp, float kw, float pos, float t,
+  MotorData setMotorProp(int mode, float kp, float kd, float pos, float t,
                          float w) {
     _cmd.mode = mode;
     _cmd.K_P = kp;
-    _cmd.K_W = kw;
+    _cmd.K_W = kd;
     _cmd.Pos = pos;
     _cmd.T = t;
     _cmd.W = w;
@@ -298,15 +298,15 @@ public:
     startControl = false;
     _thread->join();
   }
-
-  void UpdateMotor(int motorID, int mode, float kp, float kw, float pos,
+  // 这里也只解算了Pos，kp和kd可能需要乘除减速比
+  void UpdateMotor(int motorID, int mode, float kp, float kd, float pos,
                    float t, float w) {
     MotorCmd cmd;
     cmd.id = motorID;
     cmd.mode = mode;
     cmd.K_P = kp;
-    cmd.K_W = kw;
-    cmd.Pos = pos;
+    cmd.K_W = kd;
+    cmd.Pos =  _motors.at(motorID)->calSetpose(pos);
     cmd.T = t;
     cmd.W = w;
     if (qMotorCmd->Full()) {
@@ -316,8 +316,15 @@ public:
     }
   }
 
+  // 获取电机原始数据
   MotorData getMotorData(int MotorID) {
-    return _motors[MotorID]->getMotorData();
+    return _motors.at(MotorID)->getMotorData();
+  }
+  // 获取电机状态，提供解算数据
+  MotorData getMotorState(int MotorID) {
+    MotorData orin = _motors.at(MotorID)->getMotorData();
+    orin.Pos = _motors.at(MotorID)->getMotorPos();
+    return orin;
   }
 
   std::shared_ptr<Motor> operator[](int Motorid) { return _motors[Motorid]; }
