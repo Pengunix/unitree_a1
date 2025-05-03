@@ -1,9 +1,6 @@
 #include "motor.hpp"
 #include "unitree_a1/MotorCmd.h"
 #include "unitree_a1/MotorData.h"
-#include <boost/bind.hpp>
-#include <boost/function.hpp>
-#include <functional>
 #include <mutex>
 #include <ros/console.h>
 #include <ros/ros.h>
@@ -106,6 +103,7 @@ void pubState(std::shared_ptr<Leg> leg,
   PubMsg.pos = mdata.Pos;
   PubMsg.tau = mdata.T;
   PubMsg.vel = mdata.W;
+  PubMsg.acc = mdata.Acc;
   PubMsg.temp = mdata.Temp;
   MotorStatePub.publish(PubMsg);
 }

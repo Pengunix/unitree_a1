@@ -9,3 +9,6 @@ ACTION=="add",SUBSYSTEM=="usb-serial",DRIVER=="ftdi_sio",ATTR{latency_timer}="1"
 
 ## 项目使用
 **main.cpp**仅测试使用，在项目中使用时只需要将**uart.hpp**，**motor_msg.h**头文件加入包含路径即可。
+
+## 测试节点
+复制**test_node/motor_control_test**到工作空间一起编译即可.
