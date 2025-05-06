@@ -95,32 +95,34 @@ void pubState(std::shared_ptr<Leg> leg,
               const unitree_a1::MotorCmd::ConstPtr &msg) {
   unitree_a1::MotorData PubMsg;
   MotorData mdata = leg->getMotorState(msg->motorid);
+  std::shared_ptr<Leg> legs[4] = {legFL, legFR, legBL, legBR};
   // 仅解算姿态
-  PubMsg.legid = msg->legid;
-  PubMsg.motorid = msg->motorid;
-  PubMsg.error = mdata.MError;
-  PubMsg.mode = mdata.mode;
-  PubMsg.pos = mdata.Pos;
-  PubMsg.tau = mdata.T;
-  PubMsg.vel = mdata.W;
-  PubMsg.acc = mdata.Acc;
-  PubMsg.temp = mdata.Temp;
+  for (int legid = 0;legid<=3;legid++) {
+    for (int motorid = 0;motorid<=2;motorid++) {
+      MotorData tmpdata = legs[legid]->getMotorState(motorid);
+      PubMsg.legid.emplace_back(legid);
+      PubMsg.motorid.emplace_back(motorid);
+      PubMsg.error.emplace_back(tmpdata.MError);
+      PubMsg.acc.emplace_back(tmpdata.Acc);
+      PubMsg.mode.emplace_back(tmpdata.mode);
+      PubMsg.pos.emplace_back(tmpdata.Pos);
+      PubMsg.tau.emplace_back(tmpdata.T);
+      PubMsg.vel.emplace_back(tmpdata.W);
+      PubMsg.temp.emplace_back(tmpdata.Temp);
+    }
+  }
   MotorStatePub.publish(PubMsg);
 }
 void MotorCmdCallback(const unitree_a1::MotorCmd::ConstPtr &msg) {
   std::lock_guard<std::mutex> lck(cmdMutex);
   if (msg->legid == 0) {
     copyCmd(FL_cmd, msg);
-    pubState(legFL, msg);
   } else if (msg->legid == 1) {
     copyCmd(FR_cmd, msg);
-    pubState(legFR, msg);
   } else if (msg->legid == 2) {
     copyCmd(BL_cmd, msg);
-    pubState(legBL, msg);
   } else if (msg->legid == 3) {
     copyCmd(BR_cmd, msg);
-    pubState(legBR, msg);
   }
 }
 

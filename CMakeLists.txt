@@ -26,7 +26,7 @@ include_directories(
 )
 
 
-add_executable(Motor_node src/motor.cpp)
+add_executable(Motor_node src/Motor_node.cpp)
 target_link_libraries(Motor_node m pthread ${catkin_LIBRARIES})
 
 # add_executable(test test/motor_test.cpp)
