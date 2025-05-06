@@ -81,24 +81,14 @@ int main(int argc, char **argv) {
     loop_rate.sleep();
   }
 }
-inline void copyCmd(std::array<MotorCmd, 3> &cmd,
-                    const unitree_a1::MotorCmd::ConstPtr &msg) {
-  cmd.at(msg->motorid).mode = msg->mode;
-  cmd.at(msg->motorid).K_P = msg->kp;
-  cmd.at(msg->motorid).K_W = msg->kd;
-  cmd.at(msg->motorid).Pos = msg->pos;
-  cmd.at(msg->motorid).T = msg->tau;
-  cmd.at(msg->motorid).W = msg->vel;
-}
 
 void pubState(std::shared_ptr<Leg> leg,
               const unitree_a1::MotorCmd::ConstPtr &msg) {
   unitree_a1::MotorData PubMsg;
-  MotorData mdata = leg->getMotorState(msg->motorid);
   std::shared_ptr<Leg> legs[4] = {legFL, legFR, legBL, legBR};
   // 仅解算姿态
-  for (int legid = 0;legid<=3;legid++) {
-    for (int motorid = 0;motorid<=2;motorid++) {
+  for (int legid = 0; legid <= 3; legid++) {
+    for (int motorid = 0; motorid <= 2; motorid++) {
       MotorData tmpdata = legs[legid]->getMotorState(motorid);
       PubMsg.legid.emplace_back(legid);
       PubMsg.motorid.emplace_back(motorid);
@@ -113,16 +103,28 @@ void pubState(std::shared_ptr<Leg> leg,
   }
   MotorStatePub.publish(PubMsg);
 }
+
+inline void copyCmd(int index, std::array<MotorCmd, 3> &cmd,
+                    const unitree_a1::MotorCmd::ConstPtr &msg) {
+  cmd.at(msg->motorid[index]).mode = msg->mode[index];
+  cmd.at(msg->motorid[index]).K_P = msg->kp[index];
+  cmd.at(msg->motorid[index]).K_W = msg->kd[index];
+  cmd.at(msg->motorid[index]).Pos = msg->pos[index];
+  cmd.at(msg->motorid[index]).T = msg->tau[index];
+  cmd.at(msg->motorid[index]).W = msg->vel[index];
+}
 void MotorCmdCallback(const unitree_a1::MotorCmd::ConstPtr &msg) {
   std::lock_guard<std::mutex> lck(cmdMutex);
-  if (msg->legid == 0) {
-    copyCmd(FL_cmd, msg);
-  } else if (msg->legid == 1) {
-    copyCmd(FR_cmd, msg);
-  } else if (msg->legid == 2) {
-    copyCmd(BL_cmd, msg);
-  } else if (msg->legid == 3) {
-    copyCmd(BR_cmd, msg);
+  for (int i = 0; i < msg->legid.size(); i++) {
+    if (msg->legid[i] == 0) {
+      copyCmd(i, FL_cmd, msg);
+    } else if (msg->legid[i] == 1) {
+      copyCmd(i, FR_cmd, msg);
+    } else if (msg->legid[i] == 2) {
+      copyCmd(i, BL_cmd, msg);
+    } else if (msg->legid[i] == 3) {
+      copyCmd(i, BR_cmd, msg);
+    }
   }
 }
 

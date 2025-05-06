@@ -16,7 +16,7 @@
 #include <memory>
 #include <string>
 #include <sys/ioctl.h>
-#include <termios.h>
+// #include <termios.h>
 #include <unistd.h>
 
 #include <chrono>
@@ -64,7 +64,7 @@ public:
   }
   ~Uart() { close(_fd); }
   int SendRecv(const MotorCmd &cmd) {
-    tcflush(_fd, TCIOFLUSH);
+    // tcflush(_fd, TCIOFLUSH);
     _cmd = cmd;
     // 计算发送数据
     _calComData();
