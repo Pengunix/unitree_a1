@@ -27,6 +27,27 @@ ros::Publisher MotorStatePub;
 void MotorCmdCallback(const unitree_a1::MotorCmd::ConstPtr &msg);
 void SigintHandler(int sig);
 
+void pubState() {
+  unitree_a1::MotorData PubMsg;
+  std::shared_ptr<Leg> legs[4] = {legFL, legFR, legBL, legBR};
+  // 仅解算姿态
+  for (int legid = 0; legid <= 3; legid++) {
+    for (int motorid = 0; motorid <= 2; motorid++) {
+      MotorData tmpdata = legs[legid]->getMotorState(motorid);
+      PubMsg.legid.emplace_back(legid);
+      PubMsg.motorid.emplace_back(motorid);
+      PubMsg.error.emplace_back(tmpdata.MError);
+      PubMsg.acc.emplace_back(tmpdata.Acc);
+      PubMsg.mode.emplace_back(tmpdata.mode);
+      PubMsg.pos.emplace_back(tmpdata.Pos);
+      PubMsg.tau.emplace_back(tmpdata.T);
+      PubMsg.vel.emplace_back(tmpdata.W);
+      PubMsg.temp.emplace_back(tmpdata.Temp);
+    }
+  }
+  MotorStatePub.publish(PubMsg);
+}
+
 int main(int argc, char **argv) {
   ros::init(argc, argv, "Motor_node");
   ros::NodeHandle nodeHandle;
@@ -78,30 +99,9 @@ int main(int argc, char **argv) {
       legBR->UpdateMotor(i, BR_cmd[i].mode, BR_cmd[i].K_P, BR_cmd[i].K_W,
                          BR_cmd[i].Pos, BR_cmd[i].T, BR_cmd[i].W);
     }
+    pubState();
     loop_rate.sleep();
   }
-}
-
-void pubState(std::shared_ptr<Leg> leg,
-              const unitree_a1::MotorCmd::ConstPtr &msg) {
-  unitree_a1::MotorData PubMsg;
-  std::shared_ptr<Leg> legs[4] = {legFL, legFR, legBL, legBR};
-  // 仅解算姿态
-  for (int legid = 0; legid <= 3; legid++) {
-    for (int motorid = 0; motorid <= 2; motorid++) {
-      MotorData tmpdata = legs[legid]->getMotorState(motorid);
-      PubMsg.legid.emplace_back(legid);
-      PubMsg.motorid.emplace_back(motorid);
-      PubMsg.error.emplace_back(tmpdata.MError);
-      PubMsg.acc.emplace_back(tmpdata.Acc);
-      PubMsg.mode.emplace_back(tmpdata.mode);
-      PubMsg.pos.emplace_back(tmpdata.Pos);
-      PubMsg.tau.emplace_back(tmpdata.T);
-      PubMsg.vel.emplace_back(tmpdata.W);
-      PubMsg.temp.emplace_back(tmpdata.Temp);
-    }
-  }
-  MotorStatePub.publish(PubMsg);
 }
 
 inline void copyCmd(int index, std::array<MotorCmd, 3> &cmd,
