@@ -107,8 +107,9 @@ int main(int argc, char **argv) {
 inline void copyCmd(int index, std::array<MotorCmd, 3> &cmd,
                     const unitree_a1::MotorCmd::ConstPtr &msg) {
   cmd.at(msg->motorid[index]).mode = msg->mode[index];
-  cmd.at(msg->motorid[index]).K_P = msg->kp[index];
-  cmd.at(msg->motorid[index]).K_W = msg->kd[index];
+  // 传入的Kp kw均为输出轴 故转子kp kw由此计算得来 9.1为减速比
+  cmd.at(msg->motorid[index]).K_P = (msg->kp[index] / (9.1 * 9.1)) / 26.07;
+  cmd.at(msg->motorid[index]).K_W = (msg->kd[index] / (9.1 * 9.1)) * 100.0;
   cmd.at(msg->motorid[index]).Pos = msg->pos[index];
   cmd.at(msg->motorid[index]).T = msg->tau[index];
   cmd.at(msg->motorid[index]).W = msg->vel[index];
