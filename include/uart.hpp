@@ -21,6 +21,9 @@
 
 #include <chrono>
 
+#define UART_READ_SIZE 78
+#define UART_WRITE_SIZE 34
+
 class Uart {
 public:
   Uart(std::string dev, int baudrate = 4800000) {
@@ -68,7 +71,7 @@ public:
     _cmd = cmd;
     // 计算发送数据
     _calComData();
-    int wsize = write(_fd, &_cmd.motorRawData, 34);
+    int wsize = write(_fd, &_cmd.motorRawData, UART_WRITE_SIZE);
     if (wsize <= 0) {
       std::cerr << "Error in Writing Data" << std::endl;
       return -1;
@@ -85,6 +88,10 @@ public:
 
     usleep(50);
     int rsize = Read();
+    // 数据包短缺重读
+    if (rsize < UART_READ_SIZE) {
+      rsize += Read(900, rsize, UART_READ_SIZE - rsize);
+    }
     if (rsize <= 0) {
       std::cerr << "Read Error!" << std::endl;
       return -1;
@@ -101,9 +108,9 @@ public:
     // 判断包头及CRC校验 四字节x18 数据长度写死
     if (_buffer[0] == 0xFE && _buffer[1] == 0xEE &&
         crc32_core((uint32_t *)_buffer, 18) ==
-            *(uint32_t *)(_buffer + 78 - 4)) {
+            *(uint32_t *)(_buffer + UART_READ_SIZE - 4)) {
       memset(&(_rdata.motor_recv_data), 0, sizeof(_rdata.motor_recv_data));
-      memcpy(&(_rdata.motor_recv_data), _buffer, 78);
+      memcpy(&(_rdata.motor_recv_data), _buffer, UART_READ_SIZE);
     } else {
       std::cerr << "CRC Error" << std::endl;
       return -1;
@@ -112,7 +119,7 @@ public:
     return 0;
   }
 
-  int Read(int tout_us = 900) {
+  int Read(int tout_us = 900, int bufferOffset = 0, int tsize = UART_READ_SIZE) {
     fd_set inputs;
     struct timeval tout;
     tout.tv_sec = 0;
@@ -131,11 +138,8 @@ public:
     }
     if (ret > 0) {
       if (FD_ISSET(_fd, &inputs)) {
-        num = read(_fd, _buffer, 78);
+        num = read(_fd, _buffer+bufferOffset, tsize);
       }
-    }
-    if (num < 78) {
-      num += read(_fd, _buffer + num, 78 - num);
     }
     return num;
   }

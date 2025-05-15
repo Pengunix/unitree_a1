@@ -132,5 +132,4 @@ void MotorCmdCallback(const unitree_a1::MotorCmd::ConstPtr &msg) {
 void SigintHandler(int sig) {
   ROS_INFO("shutting down!");
   ros::shutdown();
-  exit(0);
 }

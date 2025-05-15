@@ -189,6 +189,8 @@ public:
       std::lock_guard<std::mutex> lck(this->mReadLock);
       MotorData data = uart->GetMotorData();
       if (data.motor_id == _cmd.id) {
+        // 更改速度方向
+        data.W *= dir;
         _motorStatus = data;
       }
     }
@@ -200,6 +202,7 @@ public:
       std::lock_guard<std::mutex> lck(this->mReadLock);
       MotorData data = uart->GetMotorData();
       if (data.motor_id == _cmd.id) {
+        data.W *= dir;
         _motorStatus = data;
       }
     }
